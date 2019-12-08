@@ -1,0 +1,4 @@
+- name: restart dante
+  service: name=danted state=restarted
+  listen: "restart dante"
+

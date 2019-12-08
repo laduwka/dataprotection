@@ -1,0 +1,11 @@
+- name: Update repo
+  apt:
+    update_cache: yes
+  when:
+    - ansible_lsb.id | lower  == "ubuntu"
+
+- name: Upgrade packages
+  apt:
+    upgrade: yes
+  when:
+    - ansible_lsb.id | lower  == "ubuntu"

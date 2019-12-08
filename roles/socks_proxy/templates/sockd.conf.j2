@@ -1,0 +1,58 @@
+logoutput: /var/log/danted.log
+# IP или имя и порт "внутреннего" интерфейса
+internal: eth0 port = 2198
+# IP "внешнего" интерфейса
+# Скорее всего, он будет точно таким же
+external: eth0
+
+socksmethod: username
+#clientmethod: none
+
+user.privileged: root
+user.notprivileged: nobody
+#user.libwrap: nobody
+
+# На первой стадии соединения всем всё можно
+client pass {
+        from: 0.0.0.0/0 to: 0.0.0.0/0
+        log: error connect disconnect
+}
+
+# На loopback-интерфейс всем нельзя
+#socks block {
+#        from: 0.0.0.0/0 to: 127.0.0.0/8
+#        log: connect error
+#}
+
+# Если сервер подключен к каким-то внутренним сетям,
+# их тоже нужно заблокировать для внешних клиентов,
+# иначе будет дыра в безопасности
+#socks block {
+#        from: 0.0.0.0/0 to: 192.168.0.0/16
+#        log: connect error
+#}
+
+# Дальше прописываем разрешающие правила.
+# По одному для каждой подсети, куда ходить МОЖНО
+socks pass {
+        from: 0.0.0.0/0 to: 0.0.0.0/0
+        command: bind connect udpassociate
+        log: error connect disconnect iooperation
+       # socksmethod: username
+}
+
+#socks pass {
+#        from: 0.0.0.0/0 to: 4.5.6.0/24
+#        command: connect
+#        log: error
+#        socksmethod: username
+#}
+
+
+
+# По умолчанию всех, кто не подошел под другие
+# правила, запрещаем
+#socks block {
+# from: 0.0.0.0/0 to: 0.0.0.0/0
+# log: connect error
+#}

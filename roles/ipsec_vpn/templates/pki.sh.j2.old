@@ -1,0 +1,40 @@
+#!/bin/bash
+
+#generate key for root cert
+ipsec pki --gen --type rsa --size 4096 --outform pem > /etc/ipsec.d/private/root-ca-priv-key.pem
+chmod 600 /etc/ipsec.d/private/root-ca-priv-key.pem
+
+#generate the corresponding public key to the private key
+ipsec pki --pub < /etc/ipsec.d/private/root-ca-priv-key.pem > /etc/ipsec.d/private/root-ca-pub-key.pub
+chmod 600  /etc/ipsec.d/private/root-ca-pub-key.pub
+
+#generate and sign by previously generated key root cert
+ipsec pki --self --ca --lifetime 3650 --in /etc/ipsec.d/private/root-ca-priv-key.pem --type rsa --dn "CN={{ domain }} root CA" --outform pem > /etc/ipsec.d/cacerts/root-ca-cert.pem
+chmod 600 /etc/ipsec.d/cacerts/root-ca-cert.pem
+
+#generate key for the VPN server
+ipsec pki --gen --type rsa --size 4096 --outform pem > /etc/ipsec.d/private/{{ domain }}-server-key.pem
+chmod 600 /etc/ipsec.d/private/{{ domain }}-server-key.pem
+
+#generate and sign the VPN server cert with the certificate authority's key
+ipsec pki --pub --in /etc/ipsec.d/private/{{ domain }}-server-key.pem --type rsa | ipsec pki --issue --lifetime 1825 --cacert /etc/ipsec.d/cacerts/root-ca-cert.pem --cakey /etc/ipsec.d/private/root-ca-priv-key.pem --dn "CN={{ domain }}" --san "{{ domain }}" --flag serverAuth --flag ikeIntermediate --outform pem >  /etc/ipsec.d/certs/{{ domain }}-server-cert.pem
+chmod 600 /etc/ipsec.d/certs/{{ domain }}-server-cert.pem
+
+#generate keys and certs for users
+USER_CERTS_STORE='/etc/vpn_users'
+
+if ! [ -d $USER_CERTS_STORE ]; then
+    mkdir $USER_CERTS_STORE
+fi
+
+{% set vpn_users = vpn_username %}
+{% for user in vpn_users %}
+
+
+  ipsec pki --gen --type rsa --size 4096 --outform pem > $USER_CERTS_STORE/{{ user }}.key.pem
+  ipsec pki --pub --in $USER_CERTS_STORE/{{ user }}.key.pem | ipsec pki --issue --cacert /etc/ipsec.d/cacerts/root-ca-cert.pem --cakey /etc/ipsec.d/private/root-ca-priv-key.pem --dn "C=US, O='Astrangella', CN={{ user }}" --outform pem > $USER_CERTS_STORE/{{ user }}.cert.pem
+
+  #This packs up the client key and certificate, together with the CA certificate, into a PKCS#12 container for easy distribution
+  openssl pkcs12 -export  -inkey $USER_CERTS_STORE/{{ user }}.key.pem -in $USER_CERTS_STORE/{{ user }}.cert.pem -name "{{ user }}" -caname "{{ domain }}"  -out $USER_CERTS_STORE/{{ user }}.p12
+
+{% endfor %}

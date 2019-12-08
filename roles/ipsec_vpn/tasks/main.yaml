@@ -1,0 +1,33 @@
+- name: Install strongswan
+  apt:
+    update-cache: yes
+    name: strongswan
+    state: latest
+  tags: vpn
+
+- name: Install strongswan-pki
+  apt:
+    update-cache: yes
+    name: strongswan-pki
+    state: latest
+  tags: vpn
+
+- include_tasks: key_infrastructure.yaml
+  when: pki_update == True
+
+- name: Add ipsec conf
+  template: src=ipsec.conf.j2 dest=/etc/ipsec.conf
+  notify: "restart strongswan"
+  tags: vpn
+
+- name: Add ipsec secrets
+  template: src=ipsec.secrets.j2 dest=/etc/ipsec.secrets
+  notify: "restart strongswan"
+  tags: vpn
+
+- include_tasks: network.yaml
+
+
+
+
+

@@ -1,0 +1,37 @@
+config setup
+    uniqueids=never # allow multiple connections per user
+    charondebug="ike 2, knl 2, cfg 2, net 2, esp 2, dmn 2,  mgr 2"
+
+conn %default
+    fragmentation=yes #включение внутренней фрагментации пакетов. Позволяет использовать IPsec с провайдерами, у которых сломана IP-фрагментация пакетов
+    rekey=no #выключение инициации смены ключей со стороны сервера. Windows это не любит.
+    dpdaction=clear #включает механизм Dead Peer Detection (DPD) и указывает, что нужно забывать о клиенте, если он не отзывался дольше таймаута
+    keyexchange=ikev2
+    compress=yes
+    dpddelay=35s #задержка до включения DPD
+    #dpdtimeout=300s #таймаут для DPD
+    #type=tunnel
+    #aggressive=no
+    #keyexchange=ikev2
+    #forceencaps=yes
+
+    ike=aes256gcm16-prfsha512-ecp384,aes256-sha2_512-prfsha512-ecp384,aes256-sha2_384-prfsha384-ecp384,aes256-sha1-modp1024,3des-sha1-modp1024! # перечень ciphersuites для использования с IKE (т.е. во время установки шифрованного соединения для передачи конфигурационных параметров, в том числе и ключей для установки SA)
+    esp=aes256gcm16-ecp384,aes256-sha2_512-prfsha512-ecp384,aes256-sha1,3des-sha1! #перечень ciphersuites для шифрования трафика
+
+    left=%any
+    leftauth=pubkey
+    leftid={{ domain }}
+    leftcert={{ domain }}.crt
+    leftsendcert=always
+    leftsubnet=0.0.0.0/0 #подсети, которые мы отправляем клиенту для маршрутизации (весь IPv4 интернет)
+
+    right=%any
+    #rightid=%any
+    rightauth=pubkey
+    rightsourceip=10.12.10.0/24 # пул IP-адресов, из которого выдаем адрес клиенту.
+    rightdns=8.8.8.8, 4.4.4.4, 1.1.1.1
+
+conn ikev2-pubkey
+    #keyexchange=ikev2
+    auto=add
+

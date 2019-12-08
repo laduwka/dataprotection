@@ -1,0 +1,241 @@
+- name: Ensure the pki directory does not exist
+  file:
+    path: "{{ pki_path }}"
+    state: absent
+  tags: vpn
+
+- name: Ensure the pki dir exist
+  file:
+    dest: "{{ pki_path }}"
+    state: directory
+    mode: '0700'
+    owner: root
+  tags: vpn
+
+- name: Ensure the pki directories exist
+  file:
+    dest: "{{ pki_path }}/{{ item }}"
+    state: directory
+    recurse: yes
+    mode: '0700'
+  with_items:
+      - ecparams
+      - certs
+      - crl
+      - newcerts
+      - private
+      - public
+      - reqs
+      - users
+  tags: vpn
+
+- name: Ensure the files exist
+  file:
+    dest: "{{ pki_path }}/{{ item }}"
+    state: touch
+  with_items:
+      - ".rnd"
+      - "index.txt"
+      - "index.txt.attr"
+      - "serial"
+  tags: vpn
+
+- name: Generate the openssl main config
+  template:
+    src: openssl.cnf.j2
+    dest: "{{ pki_path }}/openssl.cnf"
+  tags: vpn
+
+- name: Generate openssl user configs
+  template:
+    src: openssl.user.cnf.j2
+    dest: "{{ pki_path }}/openssl-{{ item }}.cnf"
+  with_items: "{{ vpn_users }}"
+  tags: vpn
+
+- name: Generate openssl domain config
+  template:
+    src: openssl.domain.cnf.j2
+    dest: "{{ pki_path }}/openssl-{{ domain }}.cnf"
+  tags: vpn
+
+- name: generate CA passwd
+  local_action:
+    module: shell
+      openssl rand -base64 15
+  register: CA_key_passwd
+  tags: vpn
+
+- name: generate P12 passwd
+  local_action:
+    module: shell
+      openssl rand -base64 15
+  register: p12_password
+  tags: vpn
+
+- name: Create file with passwords
+  copy:
+    dest: "{{ pki_path }}/users/passwds"
+    content: "CA key passwd: {{ CA_key_passwd.stdout }}\nP12 passwd: {{ p12_password.stdout }}\n"
+    owner: root
+    group: root
+    mode: 0600
+  tags: vpn
+
+- name: create CA
+  shell: >
+    umask 077;
+    openssl ecparam -name secp384r1 -out ecparams/secp384r1.pem &&
+    openssl req -utf8 -new
+    -newkey ec:ecparams/secp384r1.pem
+    -config openssl.cnf
+    -keyout private/cakey.pem
+    -out cacert.pem -x509
+    -days 3650
+    -batch
+    -passout pass:"{{ CA_key_passwd.stdout }}"
+  args:
+    chdir: "{{ pki_path }}"
+    executable: bash
+  tags: vpn
+
+- name: Generate serial number
+  shell: echo 01 > serial
+  args:
+    chdir: "{{ pki_path }}"
+  tags: vpn
+
+- name: build server cert and key
+  shell: >
+    umask 077;
+    openssl req -utf8 -new -newkey ec:ecparams/secp384r1.pem
+    -config "openssl-{{ domain }}.cnf"
+    -keyout private/{{ domain }}.key
+    -out reqs/{{ domain }}.req -nodes
+    -passin pass:"{{ CA_key_passwd.stdout }}"
+    -subj "/CN={{ domain }}"
+    -batch &&
+    openssl ca -utf8 -in reqs/{{ domain }}.req
+    -out certs/{{ domain }}.crt
+    -config "openssl-{{ domain }}.cnf"
+    -days 3650 -batch
+    -passin pass:"{{ CA_key_passwd.stdout }}"
+    -subj "/CN={{ domain }}"
+  args:
+    chdir: "{{ pki_path }}"
+    executable: bash
+  tags: vpn
+
+- name: build client cert and key
+  shell: >
+    umask 077;
+    openssl req -utf8 -new -newkey ec:ecparams/secp384r1.pem
+    -config openssl-{{ item }}.cnf
+    -keyout private/{{ item }}.key
+    -out reqs/{{ item }}.req -nodes
+    -passin pass:"{{ CA_key_passwd.stdout }}" -subj "/CN={{ item }}" -batch &&
+    openssl ca -utf8 -in reqs/{{ item }}.req
+    -out certs/{{ item }}.crt
+    -config openssl-{{ item }}.cnf
+    -days 3650
+    -batch
+    -passin pass:"{{ CA_key_passwd.stdout }}"
+    -subj "/CN={{ item }}"
+  args:
+    chdir: "{{ pki_path }}"
+    executable: bash
+  with_items: "{{ vpn_users }}"
+  tags: vpn
+
+- name: export p12 client's file
+  shell: >
+    umask 077;
+    openssl pkcs12
+    -in certs/{{ item }}.crt
+    -inkey private/{{ item }}.key
+    -export -name {{ item }}
+    -out private/{{ item }}.p12
+    -passout pass:"{{ p12_password.stdout }}"
+  args:
+    chdir: "{{ pki_path }}"
+    executable: bash
+  with_items: "{{ vpn_users }}"
+  tags: vpn
+
+- name: Copy keys and certs to ipsec
+  copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  with_items:
+    - src: "{{ pki_path }}/cacert.pem"
+      dest: "/etc/ipsec.d/cacerts/ca.crt"
+      owner: strongswan
+      group: root
+      mode: "0600"
+    - src: "{{ pki_path }}/certs/{{ domain }}.crt"
+      dest: "/etc/ipsec.d/certs/{{ domain }}.crt"
+      owner: strongswan
+      group: root
+      mode: "0600"
+    - src: "{{ pki_path }}/private/{{ domain }}.key"
+      dest: "/etc/ipsec.d/private/{{ domain }}.key"
+      owner: strongswan
+      group: root
+      mode: "0600"
+  tags: vpn
+
+- name: Register p12 file
+  shell: cat private/{{ item }}.p12 | base64
+  register: p12Content
+  args:
+    chdir: "{{ pki_path }}"
+  with_items: "{{ vpn_users }}"
+  tags: vpn
+
+- name: Set facts for mobileconfig
+  set_fact:
+    CAContent: "{{ lookup('file' , '{{ pki_path }}/cacert.pem')|b64encode }}"
+  tags: vpn
+
+- name: Build the mobileconfigs
+  template:
+    src: user.mobileconfig.j2
+    dest: "{{ pki_path }}/users/{{ item.0 }}.mobileconfig"
+    mode: 0600
+  with_together:
+    - "{{ vpn_users }}"
+    - "{{ p12Content.results }}"
+  no_log: True
+  tags: vpn
+
+- name:  Build the windows client powershell script
+  template:
+    src: user.windows.ps1.j2
+    dest: "{{ pki_path }}/users/windows_{{ item.0 }}.ps1"
+    mode: 0600
+  with_together:
+    - "{{ vpn_users }}"
+    - "{{ p12Content.results }}"
+  no_log: True
+  tags: vpn
+
+- name: Build the client ipsec config file
+  template:
+    src: client_ipsec.conf.j2
+    dest: "{{ pki_path }}/users/ipsec_{{ item }}.conf"
+    mode: 0600
+  with_items:
+    - "{{ vpn_users }}"
+
+- name: Build the client ipsec secret file
+  template:
+    src: client_ipsec.secrets.j2
+    dest: "{{ pki_path }}/users/ipsec_{{ item }}.secrets"
+    mode: 0600
+  with_items:
+    - "{{ vpn_users }}"
+
+

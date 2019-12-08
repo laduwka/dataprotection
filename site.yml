@@ -1,0 +1,7 @@
+- hosts: localhost
+  vars_files:
+    - config.cfg
+  roles:
+    - update_sys
+    - socks_proxy
+    - ipsec_vpn

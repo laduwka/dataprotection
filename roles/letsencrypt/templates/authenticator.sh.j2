@@ -1,0 +1,21 @@
+#!/bin/bash
+
+API_KEY="{{ do_api_key }}"
+BASIC_DOMAIN=`echo {{ domain }} | awk -F . '{print $2 "." $3}' `
+SUBDOMAIN=`echo {{ domain }} | awk -F . '{print $1}' `
+# Create TXT record
+CREATE_DOMAIN="_acme-challenge.$SUBDOMAIN"
+
+RECORD_ID=$(curl -s -X POST -H  "Authorization: Bearer $API_KEY"  -H  "Content-Type: application/json" \
+     --data '{"type":"TXT","name":"'"$CREATE_DOMAIN"'","data":"'"$CERTBOT_VALIDATION"'","ttl":120}' \
+            "https://api.digitalocean.com/v2/domains/$BASIC_DOMAIN/records/" | python -c "import sys,json;print(json.load(sys.stdin)['domain_record']['id'])")
+
+# Save info for cleanup
+if [ ! -d /tmp/CERTBOT_$CERTBOT_DOMAIN ];then
+        mkdir -m 0700 /tmp/CERTBOT_$CERTBOT_DOMAIN
+fi
+
+echo $RECORD_ID > /tmp/CERTBOT_$CERTBOT_DOMAIN/RECORD_ID
+
+# Sleep to make sure the change has time to propagate over to DNS
+sleep 40

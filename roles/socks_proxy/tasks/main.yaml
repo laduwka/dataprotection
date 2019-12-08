@@ -1,0 +1,61 @@
+- name: Install dante-server
+  apt:
+    update-cache: yes
+    name: dante-server
+    state: latest
+  tags: proxy
+
+- name: Enable dante at startup
+  systemd:
+    enabled: yes
+    name: danted
+  tags: proxy
+
+- name: Add dante conf
+  template: src=sockd.conf.j2 dest=/etc/danted.conf
+  notify: "restart dante"
+  tags: proxy
+
+- name: generate user for proxy
+  local_action:
+    module: shell
+      openssl rand -hex 9
+  register: proxy_user_login
+  tags: proxy
+
+- name: generate passwd for proxy
+  local_action:
+    module: shell
+      openssl rand -base64 15
+  register: proxy_user_password
+  tags: proxy
+
+- name: Encrypt user's passwd
+  local_action:
+    module: shell
+      python -c 'import crypt,subprocess;salt=subprocess.check_output("openssl rand -hex 6", shell=True); print crypt.crypt("{{ proxy_user_password.stdout }}", "salt")'
+  register: crypt_passwd
+
+- name: add user for dante server
+  user:
+    name: "{{ proxy_user_login.stdout }}"
+    shell: /sbin/nologin
+    password: "{{ crypt_passwd.stdout }}"
+    create_home: no
+    state: present
+  tags: proxy
+
+- name: Ensure passwd file absence
+  file:
+    path: "/root/proxy.passwd"
+    state: absent
+  tags: proxy
+
+- name: Create file with user and password
+  copy:
+    dest: "/root/proxy.passwd"
+    content: "Login: {{ proxy_user_login.stdout }}\nPasswd: {{ proxy_user_password.stdout }}\n"
+    owner: root
+    group: root
+    mode: 0600
+  tags: proxy

@@ -1,0 +1,36 @@
+*nat
+:PREROUTING ACCEPT [5083:294041]
+:INPUT ACCEPT [1005:66061]
+:OUTPUT ACCEPT [201:13062]
+:POSTROUTING ACCEPT [201:13062]
+-A POSTROUTING -s 10.12.10.0/24 -m policy --dir out --pol none -j MASQUERADE
+COMMIT
+
+*mangle
+:PREROUTING ACCEPT [1786240:1798028241]
+:INPUT ACCEPT [632902:76300628]
+:FORWARD ACCEPT [1153338:1721727613]
+:OUTPUT ACCEPT [1250244:1806193745]
+:POSTROUTING ACCEPT [2403521:3527917982]
+COMMIT
+
+*filter
+:INPUT DROP [3849:212335]
+:FORWARD DROP [22:880]
+:OUTPUT ACCEPT [1250244:1806193745]
+-A INPUT -i lo -j ACCEPT
+-A INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A INPUT -p esp -j ACCEPT
+-A INPUT -p ah -j ACCEPT
+-A INPUT -p icmp -m icmp --icmp-type 8 -m hashlimit --hashlimit-upto 5/sec --hashlimit-burst 5 --hashlimit-mode srcip --hashlimit-name icmp-echo-drop -j ACCEPT
+-A INPUT -p udp -m multiport --dports 500,4500,51820 -j ACCEPT
+-A INPUT -p tcp -m tcp --dport 2198 -j ACCEPT
+-A INPUT -p tcp -m tcp --dport 22 -m conntrack --ctstate NEW -j ACCEPT
+-A INPUT -p ipencap -m policy --dir in --pol ipsec --proto esp -j ACCEPT
+-A FORWARD -s 10.12.10.0/24 -d 10.12.10.0/24 -j DROP
+-A FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A FORWARD -p tcp -m tcp --dport 445 -j DROP
+-A FORWARD -p udp -m multiport --ports 137,138 -j DROP
+-A FORWARD -p tcp -m multiport --ports 137,139 -j DROP
+-A FORWARD -s 10.12.10.0/24 -m conntrack --ctstate NEW -m policy --dir in --pol ipsec -j ACCEPT
+COMMIT

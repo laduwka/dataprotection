@@ -1,0 +1,10 @@
+#!/usr/bin/expect -f
+set timeout -1
+
+spawn /etc/letsencrypt_cert_gen_command.sh
+
+expect  "(Y)es/(N)o:"
+
+send -- "Y\r"
+
+expect eof

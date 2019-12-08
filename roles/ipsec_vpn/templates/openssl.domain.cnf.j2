@@ -1,0 +1,68 @@
+RANDFILE = .rnd
+[ca]
+default_ca = CA_default
+
+[CA_default]
+dir = .
+certs = $dir/certs
+new_certs_dir = $certs
+database = $dir/index.txt
+certificate = $dir/cacert.pem
+private_key = $dir/private/cakey.pem
+serial = $dir/serial
+crldir = $dir/crl
+crlnumber = $dir/crlnumber
+crl = $crldir/crl.pem
+RANDFILE = $dir/private/.rand
+
+x509_extensions = my_cert
+
+crl_extensions = crl_ext
+
+default_days = 3650
+default_crl_days = 3650
+default_md = sha256
+preserve = no
+
+policy = policy_anything
+
+[policy_anything]
+countryName = optional
+stateOrProvinceName = optional
+localityName = optional
+organizationName = optional
+organizationalUnitName = optional
+commonName = supplied
+name = optional
+emailAddress = optional
+
+[req]
+default_bits = 2048
+default_keyfile = privkey.pem
+default_md = sha256
+distinguished_name = cn_only
+x509_extensions = my_signed_cert
+
+[cn_only]
+commonName = Common Name (eg: your user, host, or server name)
+commonName_max = 64
+commonName_default	= {{ domain }}
+
+[my_cert]
+basicConstraints	= CA:FALSE
+subjectKeyIdentifier	= hash
+authorityKeyIdentifier	= keyid,issuer:always
+extendedKeyUsage = serverAuth,clientAuth,1.3.6.1.5.5.7.3.17
+keyUsage = digitalSignature, keyEncipherment
+subjectAltName =DNS:{{ domain }}
+
+[my_signed_cert]
+
+subjectKeyIdentifier=hash
+authorityKeyIdentifier=keyid:always,issuer:always
+basicConstraints = CA:true
+
+[ crl_ext ]
+
+# issuerAltName=issuer:copy
+authorityKeyIdentifier=keyid:always,issuer:always

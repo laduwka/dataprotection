@@ -1,0 +1,82 @@
+- name: Install let's encrypt certbot
+  apt:
+    update-cache: yes
+    name: certbot
+    state: latest
+  when: ansible_lsb.id | lower  == "ubuntu"
+  tags:
+    - letsencrypt
+
+- name: Install expect
+  apt:
+    name: expect
+    state: latest
+  when: ansible_lsb.id | lower  == "ubuntu"
+
+- name: Copy auth-hook file
+  template:
+    src: authenticator.sh.j2
+    dest: /etc/authenticator.sh
+    mode: 0770
+  tags:
+    - letsencrypt
+
+- name: Copy cleanup-hook file
+  template:
+    src: cleanup.sh.j2
+    dest: /etc/cleanup.sh
+    mode: 0770
+  tags:
+    - letsencrypt
+
+- name: Copy letsencrypt shell script
+  template:
+    src: letsencrypt_cert_gen.sh.j2
+    dest: /etc/letsencrypt_cert_gen.sh
+    mode: 0770
+  tags:
+    - letsencrypt
+
+- name: Copy letsencrypt command shell script
+  template:
+    src: letsencrypt_cert_gen_command.sh.j2
+    dest: /etc/letsencrypt_cert_gen_command.sh
+    mode: 0770
+  tags:
+    - letsencrypt
+
+- name: Create cert
+  shell: if [ ! -f /etc/letsencrypt/live/{{domain}}/cert.pem ];then /etc/letsencrypt_cert_gen.sh;fi
+  tags:
+    - letsencrypt
+
+- name: Clean up file letsencrypt_cert_gen
+  file:
+    state: absent
+    path: /etc/letsencrypt_cert_gen.sh
+  tags:
+    - letsencrypt
+
+- name: Clean up file letsencrypt_cert_gen_command
+  file:
+    state: absent
+    path: /etc/letsencrypt_cert_gen_command.sh
+  tags:
+    - letsencrypt
+
+- name: Clean up file cleanup
+  file:
+    state: absent
+    path: /etc/cleanup.sh
+  tags:
+    - letsencrypt
+
+- name: Clean up file authenticator
+  file:
+    state: absent
+    path: /etc/authenticator.sh
+  tags:
+    - letsencrypt
+
+
+

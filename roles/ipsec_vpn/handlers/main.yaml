@@ -1,0 +1,7 @@
+- name: restart strongswan
+  service: name=strongswan state=restarted
+  listen: "restart strongswan"
+
+- name: restart iptables
+  service: name=netfilter-persistent state=restarted
+  listen: "restart iptables"

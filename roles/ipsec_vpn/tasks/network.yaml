@@ -1,0 +1,38 @@
+- name: Install iptables-persistent
+  apt:
+    name: iptables-persistent
+    state: present
+  tags: vpn
+
+- name: Add iptables rules for VPN
+  template: src=rules.v4.j2 dest=/etc/iptables/rules.v4
+  notify: "restart iptables"
+  tags: vpn
+
+- name: Enable ip forwarding
+  sysctl:
+    name: net.ipv4.ip_forward
+    value: 1
+    state: present
+  tags: vpn
+
+- name: Do not accept ICMP redirects (prevent MITM attacks)
+  sysctl:
+    name: net.ipv4.conf.all.accept_redirects
+    value: 0
+    state: present
+  tags: vpn
+
+- name: Do not send ICMP redirects (we are not a router)
+  sysctl:
+    name: net.ipv4.conf.all.send_redirects
+    value: 0
+    state: present
+  tags: vpn
+
+- name: Do not send ICMP redirects (we are not a router) 2
+  sysctl:
+    name: net.ipv4.ip_no_pmtu_disc
+    value: 1
+    state: present
+  tags: vpn
